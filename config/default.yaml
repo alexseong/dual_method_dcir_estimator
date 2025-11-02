@@ -1,0 +1,47 @@
+seed: 17
+device: cuda
+
+data:
+  dt: 1.0           # seconds
+  window: 512
+  stride: 256
+  min_dynamic_frac: 0.2
+  current_sign: discharge_positive  # (THIS PROJECT'S RULE)
+  temp_standardize: true
+
+ocv:
+  type: analytic     # analytic | table
+  # If table: provide csv path with columns [soc, ocv]
+  table_path: null
+
+model:
+  hidden: 128
+  residual_hidden: 64
+  param_softplus_eps: 1e-6
+  # softplus output scaling to map to realistic ranges
+  r0_scale: 5e-3
+  r1_scale: 5e-3
+  r2_scale: 5e-3
+  c1_scale: 1e3
+  c2_scale: 2e3
+
+loss:
+  lambda_sm: 5.0e-4
+  lambda_res: 1.0e-3
+  weight_decay: 1.0e-6
+
+train:
+  batch_size: 16
+  epochs: 80
+  lr: 2.0e-3
+  lr_min: 2.0e-4
+  early_stop_patience: 10
+  grad_clip: 1.0
+  curriculum:
+    phase1_only_pulses_epochs: 10
+    phase2_mixed_epochs: 15
+
+eval:
+  vdrop_deltaI: 5.0    # A threshold for step detection
+  vdrop_fast_tau: 1    # seconds
+  vdrop_slow_tau: 10   # seconds
