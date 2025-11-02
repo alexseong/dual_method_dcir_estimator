@@ -37,50 +37,14 @@ We further introduce a Bayesian Kalman filtering layer for online inference — 
 | DCIR | Direct Current Internal Resistance | Ω |
 
 ## 1. Introduction
-Reliable estimation of a lithium-ion cell’s **DC internal resistance (DCIR)** under real operating conditions is central to modern battery management systems (BMS). DCIR governs instantaneous **power capability**, **heat generation**, and **voltage sag**, thereby affecting **driver-perceived performance** (acceleration, regen), **safety margins** (thermal run-away risk), and **state-of-health** (SOH) diagnostics. In electric vehicles and stationary storage, the estimator must remain **accurate across a wide range of currents**, temperatures, and states of charge (SOC); it must be computationally light, data-efficient, and stable under measurement noise. Meeting all of these simultaneously is difficult because the cell’s terminal behavior couples fast interfacial phenomena (double-layer charging, SEI, contact resistances) and slow diffusion/transport effects (porous electrode and electrolyte transport), each with different time scales and temperature sensitivities. Any estimator that collapses this multiscale structure into a single lumped constant tends to be biased, especially during transients—which is precisely when the BMS needs accurate predictions.
 
-Industrial practice often defaults to the Voltage-Drop (current step) method for DCIR: apply a pulse 
-Δ
-𝐼
-ΔI and measure the corresponding 
-Δ
-𝑉
-ΔV; the ratio 
-𝑅
-drop
-=
-Δ
-𝑉
-/
-Δ
-𝐼
-R
-drop
-	​
+Reliable estimation of a lithium-ion cell’s **DC internal resistance (DCIR)** under real operating conditions is central to modern battery management systems (BMS). DCIR governs instantaneous **power capability**, **heat generation**, and **voltage sag**, thereby affecting **driver-perceived performance** (acceleration, regen), **safety margins** (thermal run-away risk), and **state-of-health** (SOH) diagnostics. In electric vehicles and stationary storage, the estimator must remain **accurate across a wide range of currents**, **temperatures, and states of charge (SOC)**; it must be **computationally light**, **data-efficient**, and **stable** under measurement noise. Meeting all of these simultaneously is difficult because the cell’s terminal behavior couples fast interfacial phenomena (double-layer charging, SEI, contact resistances) and slow diffusion/transport effects (porous electrode and electrolyte transport), each with different time scales and temperature sensitivities. Any estimator that collapses this multiscale structure into a single lumped constant tends to be biased, especially during transients—which is precisely when the BMS needs accurate predictions. 
 
-=ΔV/ΔI is simple, fast, and explainable. Yet in realistic drive cycles and grid profiles, current rarely remains piecewise constant; polarization dynamics continue to evolve well after the step, temperature may drift during the pulse, and measurement noise can corrupt small 
-Δ
-𝑉
-ΔV. As a result, 
-𝑅
-drop
-R
-drop
-	​
+Industrial practice often defaults to the Voltage-Drop (current step) method for DCIR: apply a pulse $ \Delta I $ and measure the
+corresponding $ \Delta V $; the ratio 
+$ 𝑅_{drop} = \Delta V / \Delta I$ is simple, fast, and explainable. Yet in realistic drive cycles and grid profiles, current rarely remains piecewise constant; polarization dynamics continue to evolve well after the step, temperature may drift during the pulse, and measurement noise can corrupt small $ \Delta V $. As a result, $ 𝑅_{drop} $ becomes context-dependent: it varies with the exact timing window, pre-conditioning, and the underlying relaxation state. This leads to over-optimism (underestimating sag during a subsequent burst) or over-conservatism (excess thermal derating), both undesirable for energy and power management.
 
- becomes context-dependent: it varies with the exact timing window, pre-conditioning, and the underlying relaxation state. This leads to over-optimism (underestimating sag during a subsequent burst) or over-conservatism (excess thermal derating), both undesirable for energy and power management.
-
-A classical remedy is to adopt Equivalent Circuit Models (ECMs) to explain transients: a series resistance 
-𝑅
-0
-R
-0
-	​
-
- in line with one or more 
-𝑅
-𝐶
-RC branches that represent polarization. The 2RC structure is widely accepted as the minimum realistic representation for automotive-grade cells because it separates a fast time constant (sub-seconds to a few seconds) from a slow one (tens of seconds and beyond). In tests such as HPPC (Hybrid Pulse Power Characterization) or PRBS-like excitation, a single-RC (1RC) model typically fails to reproduce the long-tail relaxation that governs voltage recovery and heat generation, forcing downstream algorithms to “learn” unphysical corrections. In practice, we also require temperature awareness: 
+A classical remedy is to adopt Equivalent Circuit Models (ECMs) to explain transients: a series resistance $𝑅_0$ in line with one or more $𝑅𝐶$ branches that represent polarization. The 2RC structure is widely accepted as the minimum realistic representation for automotive-grade cells because it separates a fast time constant (sub-seconds to a few seconds) from a slow one (tens of seconds and beyond). In tests such as HPPC (Hybrid Pulse Power Characterization) or PRBS-like excitation, a single-RC (1RC) model typically fails to reproduce the long-tail relaxation that governs voltage recovery and heat generation, forcing downstream algorithms to “learn” unphysical corrections. In practice, we also require temperature awareness: 
 𝑅
 0
 ,
