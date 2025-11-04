@@ -17,7 +17,7 @@ We further introduce a Bayesian Kalman filtering layer for online inference — 
 
 | Symbol | Meaning | Units |
 |:---:|:---|:---:|
-| \( v_{c1}, v_{c2} \) | Voltage across first and second RC polarization branches | V |
+| $$ v_{c1}, v_{c2} $$ | Voltage across first and second RC polarization branches | V |
 | $ SOC $ | State of Charge | – |
 | $ T $ | Cell temperature | °C (or K) |
 | $ I(t) $ | Applied current (positive = charge, negative = discharge) | A |
@@ -40,7 +40,7 @@ We further introduce a Bayesian Kalman filtering layer for online inference — 
 
 Reliable estimation of a lithium-ion cell’s **DC internal resistance (DCIR)** under real operating conditions is central to modern battery management systems (BMS). DCIR governs instantaneous **power capability**, **heat generation**, and **voltage sag**, thereby affecting **driver-perceived performance** (acceleration, regen), **safety margins** (thermal run-away risk), and **state-of-health** (SOH) diagnostics. In electric vehicles and stationary storage, the estimator must remain **accurate across a wide range of currents**, **temperatures, and states of charge (SOC)**; it must be **computationally light**, **data-efficient**, and **stable** under measurement noise. Meeting all of these simultaneously is difficult because the cell’s terminal behavior couples fast interfacial phenomena (double-layer charging, SEI, contact resistances) and slow diffusion/transport effects (porous electrode and electrolyte transport), each with different time scales and temperature sensitivities. Any estimator that collapses this multiscale structure into a single lumped constant tends to be biased, especially during transients—which is precisely when the BMS needs accurate predictions. 
 
-Industrial practice often defaults to the Voltage-Drop (current step) method for DCIR: apply a pulse $ \Delta I $ and measure the
+Industrial practice often defaults to the Voltage-Drop (current step) method for DCIR: apply a pulse $$ \Delta I $$ and measure the
 corresponding $ \Delta V $; the ratio 
 $ 𝑅_{drop} = \Delta V / \Delta I$ is simple, fast, and explainable. Yet in realistic drive cycles and grid profiles, current rarely remains piecewise constant; polarization dynamics continue to evolve well after the step, temperature may drift during the pulse, and measurement noise can corrupt small $ \Delta V $. As a result, $ 𝑅_{drop} $ becomes context-dependent: it varies with the exact timing window, pre-conditioning, and the underlying relaxation state. This leads to over-optimism (underestimating sag during a subsequent burst) or over-conservatism (excess thermal derating), both undesirable for energy and power management.
 
