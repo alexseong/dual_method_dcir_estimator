@@ -44,53 +44,7 @@ Industrial practice often defaults to the Voltage-Drop (current step) method for
 corresponding $ \Delta V $; the ratio 
 $ 𝑅_{drop} = \Delta V / \Delta I$ is simple, fast, and explainable. Yet in realistic drive cycles and grid profiles, current rarely remains piecewise constant; polarization dynamics continue to evolve well after the step, temperature may drift during the pulse, and measurement noise can corrupt small $ \Delta V $. As a result, $ 𝑅_{drop} $ becomes context-dependent: it varies with the exact timing window, pre-conditioning, and the underlying relaxation state. This leads to over-optimism (underestimating sag during a subsequent burst) or over-conservatism (excess thermal derating), both undesirable for energy and power management.
 
-A classical remedy is to adopt Equivalent Circuit Models (ECMs) to explain transients: a series resistance $𝑅_0$ in line with one or more $𝑅𝐶$ branches that represent polarization. The 2RC structure is widely accepted as the minimum realistic representation for automotive-grade cells because it separates a fast time constant (sub-seconds to a few seconds) from a slow one (tens of seconds and beyond). In tests such as HPPC (Hybrid Pulse Power Characterization) or PRBS-like excitation, a single-RC (1RC) model typically fails to reproduce the long-tail relaxation that governs voltage recovery and heat generation, forcing downstream algorithms to “learn” unphysical corrections. In practice, we also require temperature awareness: 
-𝑅
-0
-,
-𝑅
-1
-,
-𝑅
-2
-R
-0
-	​
-
-,R
-1
-	​
-
-,R
-2
-	​
-
- increase at low 
-𝑇
-T (ionic mobility and conductivity degrade), while 
-𝐶
-1
-,
-𝐶
-2
-C
-1
-	​
-
-,C
-2
-	​
-
- and the open-circuit voltage 
-O
-C
-V
-(
-S
-O
-C
-)
-OCV(SOC) exhibit their own temperature and SOC dependencies. These effects are nonlinear and coupled; attempting to track them with fixed parametric laws alone (e.g., pure Arrhenius for every component) can be too rigid, while using a fully black-box neural network discards physics and harms extrapolation and interpretability.
+A classical remedy is to adopt Equivalent Circuit Models (ECMs) to explain transients: a series resistance $𝑅_0$ in line with one or more $𝑅𝐶$ branches that represent polarization. The 2RC structure is widely accepted as the minimum realistic representation for automotive-grade cells because it separates a fast time constant (sub-seconds to a few seconds) from a slow one (tens of seconds and beyond). In tests such as HPPC (Hybrid Pulse Power Characterization) or PRBS-like excitation, a single-RC (1RC) model typically fails to reproduce the long-tail relaxation that governs voltage recovery and heat generation, forcing downstream algorithms to “learn” unphysical corrections. In practice, we also require temperature awareness: $𝑅_0,𝑅_1,𝑅_2$ increase at low $𝑇$ (ionic mobility and conductivity degrade), while $𝐶_1, 𝐶_2$ and the open-circuit voltage $OCV(SOC)$ exhibit their own temperature and SOC dependencies. These effects are nonlinear and coupled; attempting to track them with fixed parametric laws alone (e.g., pure Arrhenius for every component) can be too rigid, while using a fully black-box neural network discards physics and harms extrapolation and interpretability.
 
 This tension motivates hybrid modeling—marrying physics for structure with machine learning for flexibility. In recent years, Neural ODE and physics-informed learning have matured into a practical recipe for such problems: put the known differential equations (the ECM) in the forward pass, integrate them with a differentiable solver (e.g., RK4 at BMS sampling rates), and let a small neural network learn only the residual—the part that the physics cannot explain well (hysteresis, aging drift, path dependence, parasitic leakage). This preserves causality and units, keeps parameters positive (through constrained activations), and still grants the estimator enough capacity to fit complex data. Crucially, gradients flow through the integrator and the ECM states, enabling end-to-end training on raw 
 (
