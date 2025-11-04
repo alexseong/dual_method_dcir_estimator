@@ -40,51 +40,23 @@ We further introduce a Bayesian Kalman filtering layer for online inference — 
 
 Reliable estimation of a lithium-ion cell’s **DC internal resistance (DCIR)** under real operating conditions is central to modern battery management systems (BMS). DCIR governs instantaneous **power capability**, **heat generation**, and **voltage sag**, thereby affecting **driver-perceived performance** (acceleration, regen), **safety margins** (thermal run-away risk), and **state-of-health** (SOH) diagnostics. In electric vehicles and stationary storage, the estimator must remain **accurate across a wide range of currents**, **temperatures, and states of charge (SOC)**; it must be **computationally light**, **data-efficient**, and **stable** under measurement noise. Meeting all of these simultaneously is difficult because the cell’s terminal behavior couples fast interfacial phenomena (double-layer charging, SEI, contact resistances) and slow diffusion/transport effects (porous electrode and electrolyte transport), each with different time scales and temperature sensitivities. Any estimator that collapses this multiscale structure into a single lumped constant tends to be biased, especially during transients—which is precisely when the BMS needs accurate predictions. 
 
-Industrial practice often defaults to the Voltage-Drop (current step) method for DCIR: apply a pulse $$ \Delta I $$ and measure the
+Industrial practice often defaults to the Voltage-Drop (current step) method for DCIR: apply a pulse $ \Delta I $ and measure the
 corresponding $ \Delta V $; the ratio 
 $ 𝑅_{drop} = \Delta V / \Delta I$ is simple, fast, and explainable. Yet in realistic drive cycles and grid profiles, current rarely remains piecewise constant; polarization dynamics continue to evolve well after the step, temperature may drift during the pulse, and measurement noise can corrupt small $ \Delta V $. As a result, $ 𝑅_{drop} $ becomes context-dependent: it varies with the exact timing window, pre-conditioning, and the underlying relaxation state. This leads to over-optimism (underestimating sag during a subsequent burst) or over-conservatism (excess thermal derating), both undesirable for energy and power management.
 
 A classical remedy is to adopt Equivalent Circuit Models (ECMs) to explain transients: a series resistance $𝑅_0$ in line with one or more $𝑅𝐶$ branches that represent polarization. The 2RC structure is widely accepted as the minimum realistic representation for automotive-grade cells because it separates a fast time constant (sub-seconds to a few seconds) from a slow one (tens of seconds and beyond). In tests such as HPPC (Hybrid Pulse Power Characterization) or PRBS-like excitation, a single-RC (1RC) model typically fails to reproduce the long-tail relaxation that governs voltage recovery and heat generation, forcing downstream algorithms to “learn” unphysical corrections. In practice, we also require temperature awareness: $𝑅_0,𝑅_1,𝑅_2$ increase at low $𝑇$ (ionic mobility and conductivity degrade), while $𝐶_1, 𝐶_2$ and the open-circuit voltage $OCV(SOC)$ exhibit their own temperature and SOC dependencies. These effects are nonlinear and coupled; attempting to track them with fixed parametric laws alone (e.g., pure Arrhenius for every component) can be too rigid, while using a fully black-box neural network discards physics and harms extrapolation and interpretability.
 
-This tension motivates hybrid modeling—marrying physics for structure with machine learning for flexibility. In recent years, Neural ODE and physics-informed learning have matured into a practical recipe for such problems: put the known differential equations (the ECM) in the forward pass, integrate them with a differentiable solver (e.g., RK4 at BMS sampling rates), and let a small neural network learn only the residual—the part that the physics cannot explain well (hysteresis, aging drift, path dependence, parasitic leakage). This preserves causality and units, keeps parameters positive (through constrained activations), and still grants the estimator enough capacity to fit complex data. Crucially, gradients flow through the integrator and the ECM states, enabling end-to-end training on raw 
-(
-𝐼
-,
-𝑉
-,
-𝑇
-)
-(I,V,T) trajectories rather than on hand-crafted features.
+This tension motivates hybrid modeling—marrying physics for structure with machine learning for flexibility. In recent years, Neural ODE and physics-informed learning have matured into a practical recipe for such problems: put the known differential equations (the ECM) in the forward pass, integrate them with a differentiable solver (e.g., RK4 at BMS sampling rates), and let a small neural network learn only the residual—the part that the physics cannot explain well (hysteresis, aging drift, path dependence, parasitic leakage). This preserves causality and units, keeps parameters positive (through constrained activations), and still grants the estimator enough capacity to fit complex data. Crucially, gradients flow through the integrator and the ECM states, enabling end-to-end training on raw $(𝐼,𝑉,𝑇)$ trajectories rather than on hand-crafted features.
 
 Beyond modeling fidelity, a production-grade estimator must satisfy operational constraints:
 
-Computational economy: BMS controllers operate on limited hardware at 1–10 Hz (sometimes higher in sub-modules). An explicit RK4 step is stable and accurate at these rates for the ECM ODEs, avoiding the cost and implementation complexity of fully adaptive/implicit solvers unless the dynamics are truly stiff.
+* **Computational economy**: BMS controllers operate on limited hardware at 1–10 Hz (sometimes higher in sub-modules). An explicit **RK4** step is stable and accurate at these rates for the ECM ODEs, avoiding the cost and implementation complexity of fully adaptive/implicit solvers unless the dynamics are truly stiff.
 
-Identifiability under realistic excitation: On-road or in-field data are not textbook pulses. The estimator should remain well-posed for compound profiles (PRBS, WLTC-like driving, grid cycles) and modest sensor noise. Hybrid models help because physics encodes useful priors; the learning component refines rather than invents dynamics.
+* **Identifiability under realistic excitation**: On-road or in-field data are not textbook pulses. The estimator should remain well-posed for compound profiles (PRBS, WLTC-like driving, grid cycles) and modest sensor noise. Hybrid models help because physics encodes useful priors; the learning component refines rather than invents dynamics.
 
-Robustness to temperature and SOC coverage gaps: Seasonal climate, pack thermal gradients, and nonuniform SOC distributions imply that training data are imbalanced. Physics-informed structure regularizes the model in underrepresented regions and guards against pathological extrapolation.
+* **Robustness to temperature and SOC coverage gaps**: Seasonal climate, pack thermal gradients, and nonuniform SOC distributions imply that training data are imbalanced. Physics-informed structure regularizes the model in underrepresented regions and guards against pathological extrapolation.
 
-Traceability: System engineers and safety teams require explainable read-outs—for instance, a time-varying 
-𝑅
-^
-0
-(
-𝑡
-)
-R
-^
-0
-	​
-
-(t) that correlates with Voltage-Drop trends and a decomposition of polarization into fast/slow branches. A residual head 
-Δ
-𝑉
-𝜃
-ΔV
-θ
-	​
-
- should be small and structured, not an opaque correction that dominates the signal.
+* **Traceability**: System engineers and safety teams require explainable read-outs—for instance, a time-varying $\hat{R}_0(t)$ that correlates with Voltage-Drop trends and a decomposition of polarization into fast/slow branches. A residual head $ \Delta V_\theta $ should be small and structured, not an opaque correction that dominates the signal.
 
 These realities explain why neither extreme—purely heuristic DCIR formulas nor purely black-box deep nets—offers a satisfying solution. The former are not transient-correct; the latter are hard to certify and brittle when the duty cycle or temperature range changes. The middle path is to keep the ECM as the backbone and empower it with a temperature-aware parameterization and a residual neural head trained jointly with the RK4 integrator. In this setting:
 
