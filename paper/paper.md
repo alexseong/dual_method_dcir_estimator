@@ -17,7 +17,7 @@ We further introduce a Bayesian Kalman filtering layer for online inference — 
 
 | Symbol | Meaning | Units |
 |:---:|:---|:---:|
-| \\( v_{c1}, v_{c2} \\) | Voltage across first and second RC polarization branches | V |
+| \( v_{c1}, v_{c2} \) | Voltage across first and second RC polarization branches | V |
 | $ SOC $ | State of Charge | – |
 | $ T $ | Cell temperature | °C (or K) |
 | $ I(t) $ | Applied current (positive = charge, negative = discharge) | A |
