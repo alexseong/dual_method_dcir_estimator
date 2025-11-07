@@ -85,3 +85,111 @@ The most recent wave of literature — and the direction this paper follows — 
 ## 3. Methodology
 
 This section presents the proposed hybrid DCIR estimation framework in full detail. The model is built around a temperature-aware, two-branch equivalent circuit representation (2RC ECM) embedded in a differentiable ODE integrator (RK4), with two neural submodules: a parameter head that maps operating conditions to physically constrained ECM parameters, and a residual head that corrects remaining voltage mismatch stemming from hysteresis, aging, or unmodeled pack effects. The overall design preserves physical interpretability, supports end-to-end learning from raw current–voltage–temperature sequences, and yields a DCIR read-out that is both transient-aware and aligned with industrial Voltage-Drop practices.
+
+### 3.1 Overall formulation and problem statement
+We denote the measured input–output sequence as $\{I_k, V_k, T_k\}_{k=0}^N$ sampled with period $\Delta t$. We adopt the **discharge-positive** modeling convention: positive $I$ denotes discharge power flow into the external load (note that many datasets log charge-positive; those are sign-flipped at ingestion). The goal is to learn a predictor $M_\Theta$ such that the simulated terminal voltage $V_k^{pred}$ tracks $V_k$ under realistic cycles while yielding interpretable, temperature/SOC-dependent parameters whose ohmic component constitutes a model-implied DCIR:<br>
+$$
+\hat{R}(k) = (\text {ohmic series resistance output by the parameter head at step } k).
+$$
+We concurrently retain a classic Voltage-Drop estimator 
+𝑅
+drop
+R
+drop
+	​
+
+ computed on screened pulse windows as a diagnostic baseline; agreement between 
+𝑅
+^
+0
+R
+0
+	​
+
+ and 
+𝑅
+drop
+R
+drop
+	​
+
+ on quasi-steady pulses, and their divergence during transients, is a central validation axis.
+
+The hybrid model consists of:
+
+a 2RC ECM that encodes the causal dynamics between current and voltage,
+
+a parameter head 
+𝑔
+𝜃
+(
+S
+O
+C
+,
+𝑇
+)
+g
+θ
+	​
+
+(SOC,T) that outputs 
+(
+𝑅
+0
+,
+𝑅
+1
+,
+𝐶
+1
+,
+𝑅
+2
+,
+𝐶
+2
+)
+(R
+0
+	​
+
+,R
+1
+	​
+
+,C
+1
+	​
+
+,R
+2
+	​
+
+,C
+2
+	​
+
+) with positivity guarantees,
+
+a residual head 
+ℎ
+𝜙
+(
+⋅
+)
+h
+ϕ
+	​
+
+(⋅) that produces a small voltage correction 
+Δ
+𝑉
+𝜙
+ΔV
+ϕ
+	​
+
+ from local states and inputs,
+
+a differentiable RK4 integrator that advances the ECM states in time.
