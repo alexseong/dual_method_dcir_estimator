@@ -67,10 +67,3 @@ def dataframe_from_input(path: str):
         return pd.read_parquet(path)
     else:
         raise ValueError(f"Unsupported file type: {path}")
-
-
-
-
-
-
-

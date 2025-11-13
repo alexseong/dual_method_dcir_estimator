@@ -46,13 +46,3 @@ def preprocess(df: pd.DataFrame, cfg: PreprocConfig, temp_std: Standardizer | No
     else:
         out["Tz"] = out["T"].values
     return out, temp_std
-        
-
-
-
-
-
-
-
-def preprocess():
-    pass
