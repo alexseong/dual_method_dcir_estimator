@@ -91,49 +91,12 @@ We denote the measured input–output sequence as $\{I_k, V_k, T_k\}_{k=0}^N$ sa
 $$
 \hat{R}(k) = (\text {ohmic series resistance output by the parameter head at step } k).
 $$
-We concurrently retain a classic Voltage-Drop estimator 
-𝑅
-drop
-R
-drop
-	​
-
- computed on screened pulse windows as a diagnostic baseline; agreement between 
-𝑅
-^
-0
-R
-0
-	​
-
- and 
-𝑅
-drop
-R
-drop
-	​
-
- on quasi-steady pulses, and their divergence during transients, is a central validation axis.
+We concurrently retain a classic Voltage-Drop estimator $R_{drop}$ computed on screened pulse windows as a diagnostic baseline; agreement between $\hat{R}_0$ and $R_{drop}$ on quasi-steady pulses, and their divergence during transients, is a central validation axis.
 
 The hybrid model consists of:
 
-a 2RC ECM that encodes the causal dynamics between current and voltage,
-
-a parameter head 
-𝑔
-𝜃
-(
-S
-O
-C
-,
-𝑇
-)
-g
-θ
-	​
-
-(SOC,T) that outputs 
+1. a **2RC ECM** that encodes the causal dynamics between current and voltage,
+2. a parameter head $g_\theta(SOC, T)$ that outputs  
 (
 𝑅
 0
