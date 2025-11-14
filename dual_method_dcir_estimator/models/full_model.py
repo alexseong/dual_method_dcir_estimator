@@ -5,7 +5,7 @@ from .heads import ParamHead
 from .residual import ResidualNN
 from .ecm2rc import f_state_2rc
 
-class DCINeuralODE(nn.Module):
+class DCIRNeuralODE(nn.Module):
     def __init__(self, ocv="analytic", hidden=128, residual_hidden=64, param_scales=None, param_eps=1e-6, dt=1.0):
         super().__init__()
         self.ocv = AnalyticOCV if ocv == "analytic" else ocv

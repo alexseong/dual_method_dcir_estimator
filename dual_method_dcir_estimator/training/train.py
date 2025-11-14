@@ -89,3 +89,5 @@ def train_loop(config_path, data_path, run_dir):
     ).to(device)
     model.device = device
 
+    criterion = VoltageLoss
+
