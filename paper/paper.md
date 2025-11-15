@@ -96,46 +96,8 @@ We concurrently retain a classic Voltage-Drop estimator $R_{drop}$ computed on s
 The hybrid model consists of:
 
 1. a **2RC ECM** that encodes the causal dynamics between current and voltage,
-2. a parameter head $g_\theta(SOC, T)$ that outputs  
-(
-𝑅
-0
-,
-𝑅
-1
-,
-𝐶
-1
-,
-𝑅
-2
-,
-𝐶
-2
-)
-(R
-0
-	​
-
-,R
-1
-	​
-
-,C
-1
-	​
-
-,R
-2
-	​
-
-,C
-2
-	​
-
-) with positivity guarantees,
-
-a residual head 
+2. a parameter head $g_\theta(SOC, T)$ that outputs $(R_0,R_1,C_1,R_2,C_2)$ with positivity guarantees,
+3. a residual head 
 ℎ
 𝜙
 (
