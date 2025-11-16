@@ -96,18 +96,117 @@ We concurrently retain a classic Voltage-Drop estimator $R_{drop}$ computed on s
 The hybrid model consists of:
 
 1. a **2RC ECM** that encodes the causal dynamics between current and voltage,
-2. a parameter head $g_\theta(SOC, T)$ that outputs $(R_0,R_1,C_1,R_2,C_2)$ with positivity guarantees,
-3. a residual head 
+2. a **parameter head** $g_\theta(SOC, T)$ that outputs $(R_0,R_1,C_1,R_2,C_2)$ with positivity guarantees,
+3. a **residual head** $h_\phi(\cdot)$ that produces a small voltage correction $\Delta V_\phi$ from local states and inputs,
+4. a **differentiable RK4 integrator** that advances the ECM states in time.
+
+### 3.2 Two-RC equivalent circuit model (state-space form)
+**States and output**. We model two polarization branches and the bulk charge inventory:
+$$
+x = \begin{bmatrix} vc1 \\ vc2 \\ SOC \end{bmatrix},    V = OCV(SOC) - R_0I - v_{c1} - v_{c1} + \Delta V_\phi.
+$$
+
+**Continuous-time dynamics**.
+$$
+\dot{v}_{c1} = -\frac{v_{c1}}{R_1C_1} + \frac{I}{C_1}, \dot{v}_{c2} = -\frac{v_{c2}}{R_2C_2} + \frac{I}{C_2}, \dot{SOC} = \frac{\eta}{Q}I.
+$$
+
+Here $R_0,R_1,R_2>0, C_1,C_2>0, Q>0$(As), and $0\lt\eta\leq1$. The OCV–SOC map is assumed smooth and monotone on $[0,1]$, ealized either by an analytic surrogate or a calibrated lookup with interpolation. This **minimum 2RC structure** separates a fast interfacial time constant and a slow diffusion/transport time constant; Section 6 ablates 1RC vs 2RC to show why 2RC is the minimal physically faithful choice for automotive-class cells.
+
+**Discrete time via integration**. Let $x_k\approx x(k\Delta t)$. For a given current sample $I_k$ and parameters at $k$, we advance $x_k\mapsto x_{k+1}$ with RK4 (Sec. 3.5). The terminal voltage at step $k$ is then:
+$$
+V^{pred}_{k} = OCV(SOC_k) - R_{0,k}I_k - v_{c1,k} - v_{c2,k} + \Delta V_{\phi k}.
+$$
+
+### 3.3 Temperature-aware parameterization (neural parameter head)
+The ECM parameters are not constants; they vary with operating condition in ways that are difficult to capture with global parametric laws alone. We therefore define a **small, structured regressor**:
+$$
+(R_{0,k},R_{1,k},C_{1,k},R_{2,k},C_{2,k}) = g_\theta(SOC_k, T_k),
+$$
+with the following design constraints.
+
+**Positivity and scale enforcement**. To guarantee $R_i, C_i > 0$ and discourage degenerate scales we use shifted Softplus outputs:
+$$
+R_i = \epsilon_R + \alpha_R \, \text{softplus}(z_i)\text{, \hspace{1cm}}C_i = \epsilon_C + \alpha_C \, \text{softplus}(w_i), 
+$$
+with small $\epsilon_{R,C} > 0$ and calibration coefficients $\alpha_{R,C}$ chosen relative to expected magnitudes (e.g., $m\Omega$ for $R_0$, $\Omega$ for $R_{1,2}$, $10^2 - 10^4$ F for $C_{1,2}$ depending on cell format). This avoids negative/unphysical parameters and stabilizes gradients.
+
+**Context inputs**. We use $(SOC,T)$ as primary predictors. If available, additional slow-varying covariates (estimated state-of-health, cycle count) can be appended without altering the rest of the formulation. The mapping capacity is deliberately small (e.g., two hidden layers with 32–64 units, SiLU/Tanh activations) to reduce overfitting and to retain smooth, low-variance parameter trajectories.
+
+### 3.4 Residual voltage correction (neural residual head)
+Even with temperature-aware parameters, there remain effects that the canonical ECM cannot express: minor hysteresis, sensor biases, wiring drops, local heating, age-dependent offsets. We capture these with a **residual head**:
+
+Δ
+𝑉
+𝜙
+,
+𝑘
+  
+=
+  
 ℎ
 𝜙
+ ⁣
 (
-⋅
+𝑣
+𝑐
+1
+,
+𝑘
+,
+ 
+𝑣
+𝑐
+2
+,
+𝑘
+,
+ 
+S
+O
+C
+𝑘
+,
+ 
+𝐼
+𝑘
+,
+ 
+𝑇
+𝑘
 )
-h
+,
+ΔV
+ϕ,k
+	​
+
+=h
 ϕ
 	​
 
-(⋅) that produces a small voltage correction 
+(v
+c1,k
+	​
+
+,v
+c2,k
+	​
+
+,SOC
+k
+	​
+
+,I
+k
+	​
+
+,T
+k
+	​
+
+),
+
+again as a small MLP (e.g., widths 32–64) with zero-mean initialization to bias early training toward the pure ECM. We constrain 
 Δ
 𝑉
 𝜙
@@ -115,6 +214,4 @@ h
 ϕ
 	​
 
- from local states and inputs,
-
-a differentiable RK4 integrator that advances the ECM states in time.
+ implicitly through the loss (Sec. 3.6) and, optionally, through a magnitude regularizer to keep the residual small and structured; the intent is physics-informed augmentation, not replacement of the ECM.
