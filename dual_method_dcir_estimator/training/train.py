@@ -40,6 +40,11 @@ def collate_pad(batch):
     t = torch.stack(b["t"] for b in batch, 0)
     return dict(V=V, I=I, Tz=Tz, t=t)
 
+def cosine_lr(optimizer, base_lr, min_lr, step, total_steps):
+    lr = min_lr + 0.5*(base_lr-min_lr)*(1 + math.cos(math.pi*step/total_steps))
+    for pg in optimizer.param_groups:
+        pg["lr"] = lr
+
 def train_loop(config_path, data_path, run_dir):
     with open(config_path, "r") as f:
         cfg = yaml.safe_load(f)
@@ -105,3 +110,39 @@ def train_loop(config_path, data_path, run_dir):
             I = batch["I"].to(device)
             Tz = batch["Tz"].to(device)
             out = model(V, I, Tz)
+            dV = out["V_pred"] - (model.ocv(out["states"]["soc"]) - out["params"]["R0"]*I - out["states"]["vc1"] - out["states"]["vc2"])
+            loss, parts = criterion(out["V_pred"], V, out["params"], out["states"], residual_mag=dV, weight_decay=0.0, model=None)
+            optim.zero_grad()
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), cfg["train"]["grad_clip"])
+            optim.step()
+            cosine_lr(optim, cfg["train"]["lr"], cfg["train"]["min_lr"], step, total_steps)
+            step += 1
+
+        # Validation
+        model.eval()
+        with torch.no_grad():
+            vloss = 0.0
+            count = 0
+            for batch in dl_val:
+                V = batch["V"].to(device)
+                I = batch["I"].to(device)
+                Tz = batch["Tz"].to(device)
+                out = model(V, I, Tz)
+                dV = out["V_pred"] - (model.ocv(out["states"]["soc"]) - out["params"]["R0"]*I - out["states"]["vc1"] - out["states"]["vc2"])
+                loss, _ = criterion(out["V_pred"], V, out["params"], out["states"], residual_mag=dV)
+                vloss += loss.item()
+                count += 1
+            vloss /= max(1, count)
+
+        print(f"Epoch {epoch:03d}  val_loss={vloss:.6f}")
+        if vloss < best_val:
+            best_val = vloss
+            patience = 0
+            torch.save(model.state_dict(), os.path.join(run_dir, "best.pt"))
+        else:
+            patience += 1
+            if patience >= cfg["train"]["early_stop_patience"]:
+                print("Early stopping.")
+                break
+    print(f"Best val loss: {best_val:.6f}")

@@ -77,7 +77,3 @@ class DCIRNeuralODE(nn.Module):
         )
 
         return out
-
-
-
-
