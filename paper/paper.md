@@ -103,12 +103,12 @@ The hybrid model consists of:
 ### 3.2 Two-RC equivalent circuit model (state-space form)
 **States and output**. We model two polarization branches and the bulk charge inventory:
 $$
-x = \begin{bmatrix} vc1 \\ vc2 \\ SOC \end{bmatrix},    V = OCV(SOC) - R_0I - v_{c1} - v_{c1} + \Delta V_\phi.
+x = \begin{bmatrix} vc1 \\ vc2 \\ SOC \end{bmatrix} \text{, \hspace{1cm}}   V = OCV(SOC) - R_0I - v_{c1} - v_{c1} + \Delta V_\phi.
 $$
 
 **Continuous-time dynamics**.
 $$
-\dot{v}_{c1} = -\frac{v_{c1}}{R_1C_1} + \frac{I}{C_1}, \dot{v}_{c2} = -\frac{v_{c2}}{R_2C_2} + \frac{I}{C_2}, \dot{SOC} = \frac{\eta}{Q}I.
+\dot{v}_{c1} = -\frac{v_{c1}}{R_1C_1} + \frac{I}{C_1} \text{, \hspace{1cm}} \dot{v}_{c2} = -\frac{v_{c2}}{R_2C_2} + \frac{I}{C_2} \text{, \hspace{1cm}} \dot{SOC} = \frac{\eta}{Q}I.
 $$
 
 Here $R_0,R_1,R_2>0, C_1,C_2>0, Q>0$(As), and $0\lt\eta\leq1$. The OCV–SOC map is assumed smooth and monotone on $[0,1]$, ealized either by an analytic surrogate or a calibrated lookup with interpolation. This **minimum 2RC structure** separates a fast interfacial time constant and a slow diffusion/transport time constant; Section 6 ablates 1RC vs 2RC to show why 2RC is the minimal physically faithful choice for automotive-class cells.
@@ -135,18 +135,108 @@ with small $\epsilon_{R,C} > 0$ and calibration coefficients $\alpha_{R,C}$ chos
 
 ### 3.4 Residual voltage correction (neural residual head)
 Even with temperature-aware parameters, there remain effects that the canonical ECM cannot express: minor hysteresis, sensor biases, wiring drops, local heating, age-dependent offsets. We capture these with a **residual head**:
+$$
+\Delta V_{\phi,k} = h_\phi(v_{c1, k}, \, v_{c2, k}, \, \text{SOC}_k, \, I_k, \, T_k),
+$$
+again as a small MLP (e.g., widths 32–64) with zero-mean initialization to bias early training toward the pure ECM. We constrain $\Delta V_\phi$ implicitly through the loss (Sec. 3.6) and, optionally, through a magnitude regularizer to keep the residual **small** and **structured**; the intent is **physics-informed augmentation**, not replacement of the ECM.
 
+### 3.5 Differentiable RK4 integration
+We integrate the continuous dynamics using classical **Runge–Kutta 4th order** at the BMS sampling rate. Let $f(x, I, Q_{p,k})$ denote the right-hand side where $\theta_{p,k} = (R_{1,k}, (C_{1,k},(R_{2,k}), (C_{2,k}, Q, \eta)$. For step $k$:
+$$
+\begin{align*}
+k_1 &= f(x_k, I_k; Q_{p, k}), \\
+k_2 &= f(x_k + \tfrac{\Delta t}{2}k_1, I_k; Q_{p, k}), \\
+k_3 &= f(x_k + \tfrac{\Delta t}{2}k_2, I_k; Q_{p, k}), \\
+k_4 &= f(x_k + \Delta t \, k_3, I_k; Q_{p, k}), \\
+x_{k+1} &= x_k + \frac{\Delta t}{6}(k_1 + 2k_2 + 2k_3 + k4).
+\end{align*}
+$$
+
+All operations are differentiable; in PyTorch/JAX, automatic differentiation propagates through $g_\theta, h_\phi, $ and the RK4 updates, enabling end-to-end training on time series. For typical sampling (1–10 Hz) and ECM time scales, explicit RK4 is stable; if strong stiffness is observed (e.g., very small $R_iC_i$ at low $T$, one can swap RK4 for a semi-implicit variant without changing the rest of the learning machinery.
+
+### 3.6 Training objective and regularization
+**Primary fit**. On a sequence of length $N$, we minimize mean-squared voltage error:
+$$
+\mathcal{L}_{\text{MSE}} = \frac{1}{N}\sum_{k=0}^{N-1}(V_k^{\text{pred}} - V_k)^2.
+$$
+**Temporal smoothness of parameters**. To discourage implausible jitter in $R_i, C_i$, we add a discrete Tikhonov regularizer:
+$$
+\mathcal{L}_{\text{smooth}} = \frac{1}{N-1}\sum_{k=0}^{N-2}\left\lVert \theta_{p, k+1} - \theta_{p, k}\right\rVert_2^2\text{, \hspace{1cm}} \theta_{p,k} = [R_{0,k}, R_{1,k}, C_{1,k}, R_{2,k}, C_{2,k}]^\text{T}.
+$$
+**Residual discipline (optional)**. To keep $\Delta V_\phi$ from dominating:
+$$
+\mathcal{L}_{\text{res}} = \frac{1}{N}\sum_{k=0}^{N-1}(\Delta V_{\phi, k})^2.
+$$
+This term is weighted lightly to avoid suppressing legitimate corrections.
+
+**Weight decay and gradient control**. We employ AdamW with small weight decay and clip global gradient norm (e.g., $\left\lVert \nabla \right\rVert \le 1$ to stabilize long unrolls.
+
+**Total loss.**
+$$
+\mathcal{L} = \mathcal{L}_\text{MSE} + \lambda_{\text{sm}}\,\mathcal{L}_\text{smooth} + \lambda_{\text{res}}\,\mathcal{L}_\text{res} + \lambda_{\text{wd}} \left\lVert \Theta \right\rVert_2^2,
+$$
+with $\Theta$ denoting all trainable weights. We tune $\lambda_{\text{sm}}, \lambda_{\text{res}}, \lambda_{\text{wd}}$ on validation sequences to balance fidelity and physical plausibility.
+
+### 3.7 OCV modeling
+
+The OCV–SOC relation strongly influences identifiability. We support two realizations:
+
+1. **Calibrated table + interpolation** (preferred for accuracy): a monotone cubic interpolation of lab-measured OCV vs SOC at multiple temperatures; if only a single temperature is available, we use it across all $T$ and allow residuals/parameters to absorb small thermal shifts.
+
+2. **Analytic surrogate** (useful for ablations and synthetic data): a smooth, S-shaped function that captures the plateau and sharp knees near low/high SOC. Parameters of the surrogate are fixed during training to avoid entangling OCV shape with resistance learning.
+
+In both cases, clipping ensures $\text{SOC} \in [0, 1]$; extrapolation outside this interval is prevented.
+
+### 3.8 Sign conventions, units, and preprocessing
+
+**Current direction**. Many bench logs are charge-positive; we convert to **discharge-positive** ($I_{\text{model}} = -I_\text{log}$) so that $R_0\,I$ contributes a positive sag during discharge.
+
+**Sampling period**. We infer $\Delta_t$ from timestamps or header metadata and resample if necessary to achieve uniform spacing compatible with RK4.
+
+**Voltage source**. If per-cell voltages are present, we average them for a pack-level terminal voltage; otherwise we use the top-level measured terminal voltage. Minor sensor noise can be attenuated with a mild Savitzky–Golay filter on visualization only (the training target should not be aggressively prefiltered to avoid bias).
+
+**Temperature**. We use the most representative temperature channel (surface thermistor, coolant, or estimated core temperature) and convert to Kelvin. If multiple probes exist, a simple average or a learned linear combination can be used; our experiments show robustness to reasonable choices.
+
+### 3.9 Identifiability and stability considerations
+
+**Why 2RC (identifiability).** Under PRBS/pulse excitation, the voltage response exhibits at least two distinct exponential relaxations. A 1RC model structurally cannot represent the long tail; as a result, the residual head will be forced to emulate missing physics, harming extrapolation and interpretability. Using 2RC confines the residual to genuinely unmodeled effects and yields smoother, more physical parameter trajectories.
+
+**Role of OCV.** Mis-specified OCV slopes can be partially compensated by $R_0$ and the residual, leading to parameter leakage. A measured OCV table (or a well-tuned surrogate) alleviates this. We avoid learning OCV jointly with resistances in the baseline configuration; if desired, one can learn a small correction to OCV with strong smoothness penalties.
+
+**Temperature coupling.** $R_0,\,R_1,\,R_2$ typically increase at low $T$, while $C_1, \, C_2$ and OCV may shift nonlinearly. Feeding 
+$T$(and $SOC$) to the parameter head improves identifiability by explaining systematic trends without forcing the residual to absorb them.
+
+**Numerical stability.** Explicit RK4 is stable at 1–10 Hz for typical ECM time constants; if step sizes become large relative to 
+$R_i\,C_i$, reduce $\Delta t$ or adopt a semi-implicit update (e.g., trapezoidal for the RC states) — the learning objective and parameterization remain unchanged.
+
+### 3.10 Implementation details (for reproducibility)
+
+**Networks.** Parameter head: MLP with inputs $(\text{SOC}, T)$ hidden layers of 32–64 units, SiLU activations, Softplus-constrained outputs for $(R_0,\,R_1,\,C_1,\,R_2,\,C_2)$. Residual head: MLP on $(v_{c1},\, v_{c2},\, \text{SOC},\, I,\, T)$  with similar width, last-layer bias initialized to zero.
+
+**Initialization.** States start at $v_{c1} = v_{c2} = 0,\, \text{SOC}_0$ from metadata or a reasonable prior. Parameter head biases are initialized to nominal values (e.g., $R_0$ a few $\text{m}\Omega, \, R_{1,2}$ tens of $\text{m}\Omega\text{--}\Omega, C_{1,2}\,10^2 - 10^4\,\mathrm{\small F}$) to speed convergence.
+
+**Optimization.** AdamW (lr $10^{-3}-2\cdot10^{-3}$), weight decay $10^{-6}$, gradient clip 1.0, 40–60 epochs for single-cell datasets; mini-batches are contiguous windows to preserve temporal coherence.
+
+**Regularization.** $\lambda_\text{sm}$ on the order of $10^{-4}-10^{-3}$ stabilizes parameter time series without oversmoothing; $\lambda_\text{res}$ small ($\le10^{-3}$) to keep residuals modest.
+
+**Ablations.** Residual ON/OFF, 1RC vs 2RC, analytic vs table OCV, temperature-aware vs temperature-ignorant parameter head; we report voltage RMSE, parameter smoothness, and alignment with $R_\text{drop}$.
+
+### 3.11 Algorithmic summary (training loop)
+
+Given a sequence $\{I_k,\,V_k,\,T_k\}_{k=0}^N$:
+1. Initialize $x_0 = [0, 0, \text{SOC}_0]^\text{T}.$
+2. For $k = 0$ to $N-1$:
+    * a) Compute $(R_{0, k}, \, R_{1, k}, \, C_{1, k}, \, R_{2, k}, \, C_{2, k}) = g_\theta(\text{SOC}_k, T_k)$.
+	* b) Form $V_k^text{ECM} = \text{OCV}(\text{SOC}_k) - R_{0,k}I_k-v_{c1,k}-v_{c2,k}.$ 
+c) Compute 
 Δ
 𝑉
 𝜙
 ,
 𝑘
-  
 =
-  
 ℎ
 𝜙
- ⁣
 (
 𝑣
 𝑐
@@ -154,28 +244,23 @@ Even with temperature-aware parameters, there remain effects that the canonical 
 ,
 𝑘
 ,
- 
 𝑣
 𝑐
 2
 ,
 𝑘
 ,
- 
 S
 O
 C
 𝑘
 ,
- 
 𝐼
 𝑘
 ,
- 
 𝑇
 𝑘
 )
-,
 ΔV
 ϕ,k
 	​
@@ -204,14 +289,138 @@ k
 k
 	​
 
-),
-
-again as a small MLP (e.g., widths 32–64) with zero-mean initialization to bias early training toward the pure ECM. We constrain 
+).
+d) Set 
+𝑉
+𝑘
+pred
+=
+𝑉
+𝑘
+ECM
++
 Δ
 𝑉
 𝜙
-ΔV
-ϕ
+,
+𝑘
+V
+k
+pred
 	​
 
- implicitly through the loss (Sec. 3.6) and, optionally, through a magnitude regularizer to keep the residual small and structured; the intent is physics-informed augmentation, not replacement of the ECM.
+=V
+k
+ECM
+	​
+
++ΔV
+ϕ,k
+	​
+
+.
+e) Advance states 
+𝑥
+𝑘
++
+1
+=
+R
+K
+4
+(
+𝑥
+𝑘
+,
+𝐼
+𝑘
+,
+𝜃
+𝑝
+,
+𝑘
+;
+Δ
+𝑡
+)
+x
+k+1
+	​
+
+=RK4(x
+k
+	​
+
+,I
+k
+	​
+
+,θ
+p,k
+	​
+
+;Δt).
+
+Accumulate 
+𝐿
+=
+𝐿
+MSE
++
+𝜆
+sm
+𝐿
+smooth
++
+𝜆
+res
+𝐿
+res
++
+𝜆
+wd
+∥
+Θ
+∥
+2
+2
+L=L
+MSE
+	​
+
++λ
+sm
+	​
+
+L
+smooth
+	​
+
++λ
+res
+	​
+
+L
+res
+	​
+
++λ
+wd
+	​
+
+∥Θ∥
+2
+2
+	​
+
+.
+
+Backpropagate through the entire unrolled trajectory; update 
+(
+𝜃
+,
+𝜙
+)
+(θ,ϕ) with AdamW.
+
+Repeat over sequences; select hyperparameters using a held-out validation set; report metrics on test sequences.
