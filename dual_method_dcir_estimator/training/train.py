@@ -8,7 +8,6 @@ from torch.utils.data import Dataset, DataLoader
 from ..data.loaders import dataframe_from_input
 from ..data.preprocess import preprocess, PreprocConfig, Standardizer
 from ..data.segmenters import sliding_windows
-
 from ..model.full_model import DCIRNeuralODE
 from ..loss.losses import VoltageLoss
 from .utils import set_seed
@@ -89,5 +88,20 @@ def train_loop(config_path, data_path, run_dir):
     ).to(device)
     model.device = device
 
-    criterion = VoltageLoss
+    criterion = VoltageLoss(cfg["loss"]["lambda_sm"], cfg["loss"]["lambda_res"])
+    optim = torch.optim.AdamW(
+        model.parameters(), lr=cfg["train"]["lr"], weight_decay=cfg["loss"]["weight_decay"]
+    )    
 
+    best_val = 1e9
+    patience = 0
+    total_steps = cfg["train"]["epochs"] * max(1, len(dl_train))
+
+    step = 0
+    for epoch in range(cfg["train"]["epochs"]):
+        model.train()
+        for batch in dl_train:
+            V = batch["V"].to(device)
+            I = batch["I"].to(device)
+            Tz = batch["Tz"].to(device)
+            out = model(V, I, Tz)
