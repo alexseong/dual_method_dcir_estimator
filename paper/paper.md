@@ -227,200 +227,119 @@ Given a sequence $\{I_k,\,V_k,\,T_k\}_{k=0}^N$:
 1. Initialize $x_0 = [0, 0, \text{SOC}_0]^\text{T}.$
 2. For $k = 0$ to $N-1$:
     * a) Compute $(R_{0, k}, \, R_{1, k}, \, C_{1, k}, \, R_{2, k}, \, C_{2, k}) = g_\theta(\text{SOC}_k, T_k)$.
-	* b) Form $V_k^text{ECM} = \text{OCV}(\text{SOC}_k) - R_{0,k}I_k-v_{c1,k}-v_{c2,k}.$ 
-c) Compute 
-Δ
-𝑉
-𝜙
-,
-𝑘
-=
-ℎ
-𝜙
-(
-𝑣
-𝑐
-1
-,
-𝑘
-,
-𝑣
-𝑐
-2
-,
-𝑘
-,
-S
-O
-C
-𝑘
-,
-𝐼
-𝑘
-,
-𝑇
-𝑘
-)
-ΔV
-ϕ,k
-	​
+	* b) Form $V_k^\text{ECM} = \text{OCV}(\text{SOC}_k) - R_{0,k}I_k-v_{c1,k}-v_{c2,k}.$ 
+	* c) Compute $\Delta V_{\phi, k} = h_\phi(v_{c1,k}, v_{c2,k}, \text{SOC}_k, I_k, T_k).$
+	* d) Set $V_k^\text{pred} = V_k^\text{ECM} + \Delta V_{\phi, k}.$
+	* e) Advance states $\,x_{k+1} = \text{(RK4)}(x_k,\, I_k,\, \theta_{p,k};\, \Delta t)$ 
+3. Accumulate $\mathcal{L} = \mathcal{L}_\text{MSE} + \lambda_{\text{sm}}\,\mathcal{L}_\text{smooth} + \lambda_{\text{res}}\,\mathcal{L}_\text{res} + \lambda_{\text{wd}} \left\lVert \Theta \right\rVert_2^2.$
+4. Backpropagate through the entire unrolled trajectory; update $(\theta,\, \phi)$ with AdamW.
+5. Repeat over sequences; select hyperparameters using a held-out validation set; report metrics on test sequences.
 
-=h
-ϕ
-	​
+### 3.12 DCIR read-outs and interpretation
 
-(v
-c1,k
-	​
+For **operational traceability**, we report:
 
-,v
-c2,k
-	​
+* **Model-implied ohmic DCIR** $\hat{R}_0(k)$ from the parameter head, interpretable as the instantaneous series resistance at $(\text{SOC}_k, \, T_k).$ 
+* **Voltage-Drop baseline** $R_\text{drop}$ computed on screened pulses (with outlier rejection and window standardization).
 
-,SOC
-k
-	​
+Under quasi-steady conditions with small polarization evolution, $\hat{R}_0$ and $R_\text{drop}$ should align within measurement noise. During strong transients or temperature drift, $R_\text{drop}$ will be biased by evolving $v_{c1}, v_{c2} $, while $\hat{R}_0$
+ remains stable—precisely the value of a physics-informed, transient-aware estimator.
 
-,I
-k
-	​
+**Summary**. The proposed **temperature-aware 2RC ECM + RK4 + residual neural network** constitutes a Neural ODE estimator: physics provides the backbone; neural heads provide flexible, smooth parameter mappings and a disciplined residual correction. The design achieves transient-correct voltage prediction, interpretable DCIR trajectories, and practical computational cost suitable for BMS deployment, while retaining compatibility with standard Voltage-Drop diagnostics.
 
-,T
-k
-	​
+## 4. Data, Preprocessing, and Sign Conventions
 
-).
-d) Set 
-𝑉
-𝑘
-pred
-=
-𝑉
-𝑘
-ECM
-+
-Δ
-𝑉
-𝜙
-,
-𝑘
-V
-k
-pred
-	​
+The present work employs real automotive-grade lithium-ion cell measurement data obtained from a production-class high-precision battery cycler (AVL–class bench). The dataset contains time-resolved current, terminal voltage, temperature, and cell-level telemetry at 1 Hz sampling frequency, representing multiple operating segments such as rest, low-power conditioning phases, large pulsed discharge/charge steps, and mixed transient regimes. The dataset therefore contains both quasi-steady DC voltage plateaus and rich first-order and second-order relaxation responses; the latter are exactly the type of transient fading behavior that separate the 2RC ECM family from the traditional 1RC OCV–R model.
 
-=V
-k
-ECM
-	​
+Before training, several preprocessing steps are required — not to artificially beautify the signal, but to formalize the physical consistency of the neural ODE problem, prevent incorrect parameter inference, and enforce sign and frame conventions that are unfortunately inconsistent across cycler vendors, automotive test lines, and academic research. Unlike naive ML battery prediction papers, these steps are not simply “data cleaning.” In physics-informed inverse modeling, a single violated sign convention can entirely invalidate ODE inference (for example, the same +current could mean discharge on one bench and charge on another). Therefore this section explicitly fixes conventions and makes them non-ambiguous for reproducibility.
 
-+ΔV
-ϕ,k
-	​
+### 4.1 Data Fields and Sampling Geometry
 
-.
-e) Advance states 
-𝑥
-𝑘
-+
-1
-=
-R
-K
-4
-(
-𝑥
-𝑘
-,
-𝐼
-𝑘
-,
-𝜃
-𝑝
-,
-𝑘
-;
-Δ
-𝑡
-)
-x
-k+1
-	​
+Each measurement record consists of:
+* timestamp (wall time)
+* sample index (implicit “RecordingTime” column)
+* measured terminal voltage (pack-level or cell-averaged, depending on configuration)
+* measured signed current (A)
+* temperature channel ($^\circ \text{C}$) from pack thermistor or chamber sensor
+* auxiliary columns (internal cell voltages, counter registers, time-in-test, etc.)
 
-=RK4(x
-k
-	​
+Only the tuple {Voltage, Current, Temperature, Time} is used to estimate dynamic DCIR in this paper. Other fields are retained to allow future structural modeling (SOH progression, cell balancing dynamics, inter-cell variance, etc.) but are not used here for parameter learning.
 
-,I
-k
-	​
+### 4.2 Fixed Sign Convention (Critical)
 
-,θ
-p,k
-	​
+Different vendor SW uses divergent sign conventions.
+For this work we enforce the following strict global rule:
 
-;Δt).
+* **Discharge current is defined as positive**
+* **Charge current is defined as negative**
 
-Accumulate 
-𝐿
-=
-𝐿
-MSE
-+
-𝜆
-sm
-𝐿
-smooth
-+
-𝜆
-res
-𝐿
-res
-+
-𝜆
-wd
-∥
-Θ
-∥
-2
-2
-L=L
-MSE
-	​
+This is aligned with physical energy flow into an external load.
 
-+λ
-sm
-	​
+If the raw dataset uses the opposite sign (e.g., PEC_Measured_Current > 0 meaning charging), then the sign is flipped at ingestion. All ECM differential equations, RK4 steps, residual network inputs, smoothness losses, and DCIR outputs assume this convention. If this rule is broken, the neural ODE will learn inverted causal slopes, generating physically impossible $R_0$ posteriors.
 
-L
-smooth
-	​
+Therefore this step is non-negotiable for proper scientific reproducibility.
 
-+λ
-res
-	​
+### 4.3 Voltage Reference Normalization
 
-L
-res
-	​
+Voltage is not normalized, but is used in absolute terminal units.
+ECM and OCV functions assume absolute voltage in volts.
 
-+λ
-wd
-	​
+No min-max scaling is applied to voltage because doing so destroys OCV curvature information; this curvature is one of the few observables with direct electrochemical meaning.
 
-∥Θ∥
-2
-2
-	​
+### 4.4 Temperature Treatment
 
-.
+Temperature is retained as an explicit input channel and fed into the parameter-head network. Temperature is not merely metadata: in automotive traction Li-ion, $R_0$, $R_1$, $R_2$, as well as relaxation spectra are strongly temperature-dependent. Temperature is also slow-varying relative to transient current steps, which means it should not be KL-smoothed or differentiated in the time domain.
 
-Backpropagate through the entire unrolled trajectory; update 
-(
-𝜃
-,
-𝜙
-)
-(θ,ϕ) with AdamW.
+We do not normalize temperature to [0,1]; instead we standardize (mean-std) over the dataset.
+The model consumes it as a physical predictor, not a hidden latent variable.
 
-Repeat over sequences; select hyperparameters using a held-out validation set; report metrics on test sequences.
+### 4.5 Removing Non-Dynamic Segments
+
+Segments of zero-current rest conditions are preserved but annotated.
+They are not discarded, because:
+* they encode OCV
+* they define SOC drift constraints
+* they help parameter identifiability
+
+However, when we compute evaluation metrics for DCIR $drop - based$ comparison, very long zero-current plateaus are excluded (e.g., overnight stabilization) so that classical $\Delta V/\Delta I$ comparisons remain meaningful.
+
+### 4.6 No Filtering of Dynamics
+
+We explicitly **do not** apply Savitzky–Golay smoothing or low-pass filtering on the voltage trace. Filtering would suppress exactly the time-constant structure that differentiates 2RC from 1RC. Prior works that apply smoothing inadvertently erase the physics they intend to estimate.
+
+Noise is handled only through the residual network.
+
+### 4.7 Data Windowing and Training Batches
+
+Training is performed on contiguous sliding windows extracted from long sequences, preserving causal structure. We do not shuffle time. Unlike regular ML forecasting tasks, neural ODE models are not permutation-invariant — time ordering is essential.
+
+### 4.8 Why This Section Exists
+
+Most papers treat “data preprocessing” as a housekeeping detail.
+Here, the data section is central — because DCIR estimation is not purely supervised regression. DCIR estimation is a partial identification problem governed by:
+
+* a known nonlinear OCV–SOC relation
+* two first-order RC relaxation poles
+* temperature-dependent ohmic term
+* sign-constrained energy-flow convention
+
+If any of these are violated at the data interface stage, the entire downstream neural ODE inference becomes physically meaningless.
+
+Thus, this section defines the preconditions needed so that the neural ODE can learn real resistance, not a statistical surrogate.
+
+## 5. Experiment Protocol
+
+This section specifies the full experimental pipeline used to train, validate, and test the proposed temperature-aware 2RC Neural-ODE DCIR estimator. We define data splitting, windowing, baseline construction, optimization schedules, ablations, and statistical reporting. Every choice is made to ensure **reproducibility**, **physical validity**, and **fair comparison** to the classical Voltage-Drop DCIR method.
+
+### 5.1 Data partitions and coverage guarantees
+
+**Sequences and sampling.** Each experiment uses contiguous time series drawn from bench logs at 1 Hz (or uniformly resampled to $\Delta\text{t}$ if the native cadence differs). We require that all three channels are present: terminal voltage $V$, current $I$, and temperature $T$. If multiple temperature probes exist, we select a representative channel (surface/coolant/core estimate) consistently across partitions.
+
+**Stratified splits.** To prevent train/test leakage of quasi-identical conditions and to guarantee coverage across operating regimes, we split by **(SOC band, temperature band, excitation type)**:
+* SOC bands: $[0.05,0.3), [0.3,0.7), [0.7,0.95]$
+* Temperature bands ($^\circ \text{C}$): $[−20,−5), [−5,10), [10,25), [25,45], (45,60]$
+* Excitation: rest/OCV holds, step pulses (HPPC-like), PRBS/mixed drive (WLTC-like)
+
+Within each stratum we assign 60% of segments to **train**, 20% to **validation**, and 20% to **test**, ensuring that a stratum present in test is also represented in train (possibly with different exact traces). When data is scarce in extreme corners (e.g., very cold), we down-weight those strata in training but **do not** exclude them from test; this penalizes models that cannot extrapolate physics.
+
+**Randomization and seeds.** We report results averaged over three stratified seeds (s=11,17,23). For each seed, the stratified sampler draws disjoint segment IDs before windowing (Sec. 5.3). All model initializations, minibatch orders, and bootstrap resamples (Sec. 5.8) use the same seed to enable exact reproduction.
