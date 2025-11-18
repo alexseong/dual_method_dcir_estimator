@@ -10,4 +10,8 @@ def nrmse(a, b):               # Normalized RMSE
 
 def align_mae(R0_list, Rdrop_list):
     # match by time index if provided as dicts {k: value}
-    common = R0_list.keys()
+    common = sorted(set(R0_list.keys()) & set(Rdrop_list.keys()))
+    if not common:
+        return None
+    diffs = [abs(R0_list[k] - Rdrop_list[k]) for k in common]
+    return float(np.mean(diffs)), len(common)

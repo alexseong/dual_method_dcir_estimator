@@ -59,10 +59,12 @@ def main():
     ).to(device)
     model.device = device
     model.load_state_dict(torch.load(args.checkpoint, map_location=device))
-    model.eval
+    model.eval()
 
     os.makedirs(args.out_dir, exist_ok=True)
     res = evaluate_window(model, batch, cfg["eval"])
+    V = batch["V"].to(device)
+    t = batch["t"].to(device)
 
 
 
