@@ -77,7 +77,7 @@ def train_loop(config_path, data_path, run_dir):
     dl_val   = DataLoader(ds_val, batch_size=cfg["train"]["batch_size"], shuffle=True, collate_fn=collate_pad)
 
     device = torch.device(cfg["device"] if torch.cuda.is_available() and cfg["device"]=="cuda" else "cpu")
-    model = DCIRNeuralODE(param_scales=None, param_eps=1e-6, dt=1.0
+    model = DCIRNeuralODE(
         ocv="analytic",
         hidden=cfg["model"]["hidden"],
         residual_hidden=cfg["model"]["residual_hidden"],
