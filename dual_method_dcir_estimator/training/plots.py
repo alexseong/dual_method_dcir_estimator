@@ -27,8 +27,18 @@ def soc_plot(out_dir, t, soc):
     plt.savefig(os.path.join(out_dir, "soc.png"), dpi=180)
     plt.close()
 
-def r0_scatter(out_dir):
+def r0_scatter(out_dir, R0_map, Rdrop_map, name="alignment"):
     os.makedirs(out_dir, exist_ok=True)
+    ks = sorted(set(R0_map.keys()) & set(Rdrop_map.keys()))
+    if not ks: return
+    x = np.array([Rdrop_map[k] in ks])
+    y = np.array([R0_map[k] in ks])
+
     plt.figure()
-
-
+    plt.scatter(x, y, s=10)
+    plt.xlabel("R_drop (Ω)")
+    plt.ylabel("R0_model (Ω)")
+    plt.title("R_drop vs R0_model")
+    plt.tight_layout()
+    plt.savefig(os.path.join(out_dir, f"{name}.png"), dpi=180)
+    plt.close()

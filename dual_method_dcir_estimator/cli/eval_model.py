@@ -14,7 +14,7 @@ def main():
     ap.add_argument("--config", required=True)
     ap.add_argument("--data", required=True)
     ap.add_argument("--checkpoint", required=True)
-    ap.add_argument("--run_dir", required=True)
+    ap.add_argument("--out_dir", required=True)
     args = ap.parse_args()
 
     with open(args.config, "r") as f:
@@ -66,7 +66,12 @@ def main():
     V = batch["V"].to(device)
     t = batch["t"].to(device)
 
+    overlay_voltage(args.out_dir, t[0], V[0], res["out"]["V_pred"][0],
+                    title=f"RMSE={res['rmse']:.4f}, NRMSE={res['nrmse']:.2f}%")
+    soc_plot(args.out_dir, t[0], res["out"]["states"]["soc"][0])
 
+    # alignment scatter
+    # Build R0 map at detected k and corresponding R_drop maps are returned from evaluate_window
 
 if __name__ == "__main__":
     main()
