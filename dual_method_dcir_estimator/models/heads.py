@@ -19,13 +19,16 @@ class ParamHead(nn.Module):
         self.eps = eps
         
         if scales is None:
-            scales = dict(r0=5e-3, r1=5e-3, r2=5e-3, c1=5e-3, c2=5e-3)
+            scales = dict(r0=5e-3, r1=5e-3, r2=5e-3, c1=1e3, c2=2e3)
+
         self.scales = scales
 
     def forward(self, soc, tz):
         z = torch.stack([soc, tz], dim=-1)
         raw = self.mlp(z)
         raw = self.softplus(raw) + self.eps
+        
+        print(self.scales["r0"], type(self.scales["r0"]))
 
         R0 = raw[..., 0] * self.scales["r0"]
         R1 = raw[..., 1] * self.scales["r1"]

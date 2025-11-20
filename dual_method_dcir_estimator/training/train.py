@@ -8,7 +8,7 @@ from torch.utils.data import Dataset, DataLoader
 from ..data.loaders import dataframe_from_input
 from ..data.preprocess import preprocess, PreprocConfig, Standardizer
 from ..data.segmenters import sliding_windows
-from ..model.full_model import DCIRNeuralODE
+from ..models.full_model import DCIRNeuralODE
 from ..loss.losses import VoltageLoss
 from .utils import set_seed
 
@@ -34,10 +34,10 @@ class WindowsDataset(Dataset):
 
 def collate_pad(batch):
     # fixed windows, stack
-    V = torch.stack(b["V"] for b in batch, 0)
-    T = torch.stack(b["T"] for b in batch, 0)
-    Tz = torch.stack(b["Tz"] for b in batch, 0)
-    t = torch.stack(b["t"] for b in batch, 0)
+    V = torch.stack([b["V"] for b in batch], 0)
+    I = torch.stack([b["I"] for b in batch], 0)
+    Tz = torch.stack([b["Tz"] for b in batch], 0)
+    t = torch.stack([b["t"] for b in batch], 0)
     return dict(V=V, I=I, Tz=Tz, t=t)
 
 def cosine_lr(optimizer, base_lr, min_lr, step, total_steps):
@@ -55,8 +55,8 @@ def train_loop(config_path, data_path, run_dir):
     # Load data
     raw = dataframe_from_input(data_path)
     pre_cfg = PreprocConfig(
-        dt=cfg["data"]["dt"] #1.0
-        current_sign=cfg["data"]["current_sign"] # "discharge_positive"  # enforce discharge-positive rule
+        dt=cfg["data"]["dt"], #1.0
+        current_sign=cfg["data"]["current_sign"], # "discharge_positive"  # enforce discharge-positive rule
         temp_standardize=cfg["data"]["temp_standardize"] # true
     )
 
@@ -82,13 +82,13 @@ def train_loop(config_path, data_path, run_dir):
         hidden=cfg["model"]["hidden"],
         residual_hidden=cfg["model"]["residual_hidden"],
         param_scales=dict(
-            r0=cfg["model"]["r0_scale"],
-            r1=cfg["model"]["r1_scale"],
-            r2=cfg["model"]["r2_scale"],
-            c1=cfg["model"]["c1_scale"],
-            c2=cfg["model"]["c2_scale"]
+            r0=float(cfg["model"]["r0_scale"]),
+            r1=float(cfg["model"]["r1_scale"]),
+            r2=float(cfg["model"]["r2_scale"]),
+            c1=float(cfg["model"]["c1_scale"]),
+            c2=float(cfg["model"]["c2_scale"])
         ),
-        param_eps=cfg["model"]["param_softplus_eps"],
+        param_eps=float(cfg["model"]["param_softplus_eps"]),
         dt=cfg["data"]["dt"]
     ).to(device)
     model.device = device
