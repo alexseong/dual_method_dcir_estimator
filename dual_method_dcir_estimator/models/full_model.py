@@ -9,7 +9,7 @@ from .ecm2rc import f_state_2rc
 class DCIRNeuralODE(nn.Module):
     def __init__(self, ocv="analytic", hidden=128, residual_hidden=64, param_scales=None, param_eps=1e-6, dt=1.0):
         super().__init__()
-        self.ocv = AnalyticOCV if ocv == "analytic" else ocv
+        self.ocv = AnalyticOCV() if ocv == "analytic" else ocv
         self.param_head = ParamHead(hidden=hidden, eps=param_eps, scales=param_scales)
         self.residual = ResidualNN(hidden=residual_hidden)
         self.dt = dt
