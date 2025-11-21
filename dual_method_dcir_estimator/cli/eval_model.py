@@ -54,7 +54,7 @@ def main():
             c1=cfg["model"]["c1_scale"],
             c2=cfg["model"]["c2_scale"]
         ),
-        param_eps=cfg["model"]["param_softplus_eps"],
+        param_eps=float(cfg["model"]["param_softplus_eps"]),
         dt=cfg["data"]["dt"]
     ).to(device)
     model.device = device
@@ -72,6 +72,7 @@ def main():
 
     # alignment scatter
     # Build R0 map at detected k and corresponding R_drop maps are returned from evaluate_window
+    print("Done. Plots saved to:", args.out_dir)
 
 if __name__ == "__main__":
     main()

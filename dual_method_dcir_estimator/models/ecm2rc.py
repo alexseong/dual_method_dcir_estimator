@@ -9,4 +9,4 @@ def f_state_2rc(x, I, R1, C1, R2, C2, Q=3600.0, eta=1.0):
     dvc1 = -vc1/(R1*C1) + I/C1
     dvc2 = -vc2/(R2*C2) + I/C2
     dsoc = -(eta/Q)*I
-    return torch.stack([dvc1, dvc2, dsoc])
+    return torch.stack([dvc1, dvc2, dsoc], dim=-1)

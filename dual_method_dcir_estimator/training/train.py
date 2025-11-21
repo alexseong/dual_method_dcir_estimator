@@ -116,7 +116,7 @@ def train_loop(config_path, data_path, run_dir):
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), cfg["train"]["grad_clip"])
             optim.step()
-            cosine_lr(optim, cfg["train"]["lr"], cfg["train"]["min_lr"], step, total_steps)
+            cosine_lr(optim, cfg["train"]["lr"], cfg["train"]["lr_min"], step, total_steps)
             step += 1
 
         # Validation

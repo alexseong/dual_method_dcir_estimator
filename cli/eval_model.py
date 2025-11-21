@@ -14,7 +14,7 @@ def main():
     ap.add_argument("--config", required=True)
     ap.add_argument("--data", required=True)
     ap.add_argument("--checkpoint", required=True)
-    ap.add_argument("--run_dir", required=True)
+    ap.add_argument("--out_dir", required=True)
     args = ap.parse_args()
 
     with open(args.config, "r") as f:
@@ -54,7 +54,7 @@ def main():
             c1=cfg["model"]["c1_scale"],
             c2=cfg["model"]["c2_scale"]
         ),
-        param_eps=cfg["model"]["param_softplus_eps"],
+        param_eps=float(cfg["model"]["param_softplus_eps"]),
         dt=cfg["data"]["dt"]
     ).to(device)
     model.device = device
@@ -62,9 +62,7 @@ def main():
     model.eval
 
     os.makedirs(args.out_dir, exist_ok=True)
-    res = evaluate_window(model, batch, cfg["eval"])
-
-
+    res = evaluate_window(model, batch, float(cfg["eval"]))
 
 if __name__ == "__main__":
     main()
