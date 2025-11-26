@@ -17,7 +17,6 @@ class ParamHead(nn.Module):
         )
         self.softplus = nn.Softplus()
         self.eps = eps
-        print(eps, type(eps))
         
         if scales is None:
             scales = dict(r0=5e-3, r1=5e-3, r2=5e-3, c1=1e3, c2=2e3)

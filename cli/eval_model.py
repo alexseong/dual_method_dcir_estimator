@@ -57,6 +57,7 @@ def main():
         param_eps=float(cfg["model"]["param_softplus_eps"]),
         dt=cfg["data"]["dt"]
     ).to(device)
+    
     model.device = device
     model.load_state_dict(torch.load(args.checkpoint, map_location=device))
     model.eval
