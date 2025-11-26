@@ -6,8 +6,8 @@ import torch
 def overlay_voltage(out_dir, t, V_true, V_pred, title="Voltage Overlay"):
     os.makedirs(out_dir, exist_ok=True)
     plt.figure()
-    plt.plot(t, V_true.cpu().numpy(), label="meas")
-    plt.plot(t, V_pred.cpu().numpy(), label="pred", alpha=0.8)
+    plt.plot(t.cpu(), V_true.cpu().numpy(), label="meas")
+    plt.plot(t.cpu(), V_pred.cpu().numpy(), label="pred", alpha=0.8)
     plt.xlabel("Time (s)")
     plt.ylabel("V (V)")
     plt.title(title)
@@ -19,7 +19,7 @@ def overlay_voltage(out_dir, t, V_true, V_pred, title="Voltage Overlay"):
 def soc_plot(out_dir, t, soc):
     os.makedirs(out_dir, exist_ok=True)
     plt.figure()
-    plt.plot(t, soc.cpu().numpy())
+    plt.plot(t.cpu(), soc.cpu().numpy())
     plt.xlabel("Time (s)")
     plt.ylabel("SOC")
     plt.title("SOC trajectory")

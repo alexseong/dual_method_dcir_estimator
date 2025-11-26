@@ -48,21 +48,23 @@ def main():
         hidden=cfg["model"]["hidden"],
         residual_hidden=cfg["model"]["residual_hidden"],
         param_scales=dict(
-            r0=cfg["model"]["r0_scale"],
-            r1=cfg["model"]["r1_scale"],
-            r2=cfg["model"]["r2_scale"],
-            c1=cfg["model"]["c1_scale"],
-            c2=cfg["model"]["c2_scale"]
+            r0=float(cfg["model"]["r0_scale"]),
+            r1=float(cfg["model"]["r1_scale"]),
+            r2=float(cfg["model"]["r2_scale"]),
+            c1=float(cfg["model"]["c1_scale"]),
+            c2=float(cfg["model"]["c2_scale"])
         ),
         param_eps=float(cfg["model"]["param_softplus_eps"]),
         dt=cfg["data"]["dt"]
     ).to(device)
+    
     model.device = device
     model.load_state_dict(torch.load(args.checkpoint, map_location=device))
     model.eval()
 
     os.makedirs(args.out_dir, exist_ok=True)
     res = evaluate_window(model, batch, cfg["eval"])
+
     V = batch["V"].to(device)
     t = batch["t"].to(device)
 

@@ -22,7 +22,6 @@ class ParamHead(nn.Module):
             scales = dict(r0=5e-3, r1=5e-3, r2=5e-3, c1=1e3, c2=2e3)
 
         self.scales = scales
-        print(self.scales)
 
     def forward(self, soc, tz):
         z = torch.stack([soc, tz], dim=-1)

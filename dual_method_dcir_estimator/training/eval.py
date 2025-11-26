@@ -19,7 +19,7 @@ def evaluate_window(model, batch, cfg_eval):
     # baseline DCIR vs R0 at pulse onsets
     I_np = I[0].cpu().numpy()
     V_np = V[0].cpu().numpy()
-    k_list = detect_steps(I_np, deltaI=cfg_eval["eval"]["vdrop_deltaI"])  ## can't understand
+    k_list = detect_steps(I_np, deltaI=cfg_eval["vdrop_deltaI"])
     Rdrop_fast = vdrop_dcirs(V_np, I_np, k_list, tau=cfg_eval["vdrop_fast_tau"])
     Rdrop_slow = vdrop_dcirs(V_np, I_np, k_list, tau=cfg_eval["vdrop_slow_tau"])
 

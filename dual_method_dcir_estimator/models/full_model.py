@@ -55,7 +55,6 @@ class DCIRNeuralODE(nn.Module):
 
             # RK4 step for states
             x = torch.stack([vc1, vc2, soc], dim=-1)
-            x = torch.stack([vc1, vc2, soc], dim=-1)
             x = rk4_step(x, I[:, k], self.dt, f_state_2rc, R1, C1, R2, C2)
             vc1, vc2, soc = x[..., 0], x[..., 1], x[..., 2]
             soc = torch.clamp(soc, 0.0, 1.0)
